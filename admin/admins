@@ -1,0 +1,92 @@
+<?php
+include '../components/connect.php'; // Include il file di connessione al database
+
+// Verifica se l'utente è connesso come admin
+if (!isset($_COOKIE['admin_id'])) {
+    header('location:login.php'); // Reindirizza alla pagina di login se non è connesso
+    exit();
+}
+
+$admin_id = filter_var($_COOKIE['admin_id'], FILTER_SANITIZE_STRING); // Sanitizza l'ID dell'admin
+
+// Verifica se il metodo della richiesta è POST e se è stato inviato un comando di eliminazione
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete'])) {
+    $delete_id = filter_var($_POST['delete_id'], FILTER_SANITIZE_STRING); // Sanitizza l'ID dell'admin da eliminare
+
+    try {
+        $conn->beginTransaction(); // Inizia una transazione
+
+        // Prepara una query per verificare se l'admin esiste
+        $verify_delete = $conn->prepare("SELECT * FROM `admins` WHERE id = ?");
+        $verify_delete->execute([$delete_id]);
+
+        if ($verify_delete->rowCount() > 0) {
+            // Se l'admin esiste, prepara e esegui la query per eliminarlo
+            $delete_admin = $conn->prepare("DELETE FROM `admins` WHERE id = ?");
+            $delete_admin->execute([$delete_id]);
+            $conn->commit(); // Conferma la transazione
+            $success_msg = 'Admin supprimé !'; // Messaggio di successo
+        } else {
+            $conn->rollBack(); // Annulla la transazione se l'admin non è stato trovato
+            $warning_msg = 'Admin déjà supprimé !'; // Messaggio di avviso
+        }
+    } catch (Exception $e) {
+        $conn->rollBack(); // Annulla la transazione in caso di errore
+        $error_msg = 'Erreur lors de la suppression de l\'admin : ' . $e->getMessage(); // Messaggio di errore
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admins</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.2.0/css/all.min.css"> <!-- Link per Font Awesome -->
+    <link rel="stylesheet" href="../css/admin_style.css"> <!-- Link per il foglio di stile -->
+</head>
+<body>
+    <?php include '../components/admin_header.php'; ?> <!-- Include l'intestazione dell'admin -->
+
+    <section class="grid">
+        <h1 class="heading">Admins</h1> <!-- Titolo della sezione -->
+        <div class="box-container">
+            <!-- Box per creare un nuovo admin -->
+            <div class="box" style="text-align: center;">
+                <p>Créer un nouvel admin</p>
+                <a href="register.php" class="btn">S'inscrire maintenant</a>
+            </div>
+            <?php
+            // Prepara e esegui una query per selezionare tutti gli admin
+            $select_admins = $conn->prepare("SELECT * FROM `admins`");
+            $select_admins->execute();
+            if ($select_admins->rowCount() > 0) {
+                // Se ci sono admin, cicla attraverso i risultati
+                while ($fetch_admins = $select_admins->fetch(PDO::FETCH_ASSOC)) {
+                    if ($fetch_admins['name'] !== 'admin') {
+            ?>
+            <!-- Box per ogni admin -->
+            <div class="box">
+                <p>Nom : <span><?= htmlspecialchars($fetch_admins['name']); ?></span></p>
+                <form action="" method="POST">
+                    <input type="hidden" name="delete_id" value="<?= htmlspecialchars($fetch_admins['id']); ?>">
+                    <input type="submit" value="Supprimer l'admin" onclick="return confirm('Voulez-vous vraiment supprimer cet admin ?');" name="delete" class="btn">
+                </form>
+            </div>
+            <?php
+                    }
+                }
+            } else {
+                echo '<p>Aucun admin trouvé.</p>'; // Messaggio se non ci sono admin
+            }
+            ?>
+        </div>
+    </section>
+
+    <?php include '../components/message.php'; ?> <!-- Include i messaggi di successo, avviso e errore -->
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script> <!-- Script per le finestre di dialogo -->
+    <script src="../js/admin_script.js"></script> <!-- Script per la gestione delle funzionalità dell'admin -->
+</body>
+</html>
